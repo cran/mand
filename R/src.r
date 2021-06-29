@@ -62,6 +62,17 @@ NULL
 #' @format A array
 NULL
 
+#' Standard Deviation Brain Data
+#'
+#' The data is the standard deviation brain data. This represents the common standard deviation between the average images of healthy subjects and patients with Alzheimer's disease, and is used when generating artificial data.
+#' 
+#' @docType data
+#' @keywords datasets
+#' @name sdevimg
+#' @usage data(sdevimg)
+#' @format A array
+NULL
+
 #' Brain Mask
 #'
 #' The data is the brain mask. This is used to exclude extra-brain regions from the analysis.
@@ -531,9 +542,9 @@ matrix((com-1)*(row4comp*col4comp+1) + (2:(row4comp*col4comp+1)), ncol=col4comp,
 )
 
 par(oma=c(0,0,2,0), mar=c(1,1,1,1), bg="black")
-layout(laymat, heights=c(1, rep(3, row4comp)))
+layout(laymat, heights=c(1.5, rep(3, row4comp)))
 for(c1 in 1:ncomp){
-plot.new(); text(0.5,0.5,paste("Comp",comps[c1]), cex=1.5, font=2, col="white")
+plot.new(); text(0.5,0.5,paste("Comp",comps[c1]), cex=1, font=1, col="white")
 for(p1 in rev(pseq4comp)){
 coat(x, object$outstat[[comps[c1]]], pseq=p1, color.bar=FALSE, paron=F,...)
 }}
@@ -595,8 +606,10 @@ print.atlastable = function(x, ...)
 {
 t1 = x$table
 absminmax = apply(abs(t1[,c("Min.", "Max.")]), 1, max)
-t1[, c(4:6,9,11)] = round(t1[, c(4:6,9,11)],3)
-print(t1[order(-absminmax)[1:min(c(10,nrow(t1)))], c(1:4,6,9,11)])
+disnames = c("sizepct", "sumvalue", "Min.", "Mean", "Max.")
+idx = which(colnames(t1) %in% disnames)
+t1[, idx] = round(t1[, idx], 3)
+print(t1[order(-absminmax)[1:min(c(10,nrow(t1)))], c("ROIid", "ROIname", disnames)])
 cat("\n")
 }
 
@@ -817,10 +830,10 @@ img1r
 ptest = function(object, Z=Z, newdata=NULL, testZ=NULL, regmethod = "glm", methods1 = c("boot", "boot632", "cv", "repeatedcv", "LOOCV", "LGOCV")[4], metric = "ROC", number1 = 10, repeats1 = 5, params=NULL){
 
 ## Compute the area under the ROC curve, sensitivity, specificity, accuracy and Kappa
-glmFuncs <- lrFuncs
-fivestats <- function(...) c(twoClassSummary(...), defaultSummary(...), prSummary(...))
+glmFuncs <- caret::lrFuncs
+fivestats <- function(...) c(caret::twoClassSummary(...), caret::defaultSummary(...), caret::prSummary(...))
 glmFuncs$summary <- fivestats
-ctrl <- trainControl(method = methods1, number = number1, repeats = repeats1, classProbs = TRUE, summaryFunction = fivestats)
+ctrl <- caret::trainControl(method = methods1, number = number1, repeats = repeats1, classProbs = TRUE, summaryFunction = fivestats)
 
 if(inherits(object, "msma")){ Ss = object$ssX }else{Ss = object}
 colnames(Ss) = paste("c", c(1:ncol(Ss)), sep="")
@@ -933,4 +946,5 @@ if (n == 64) {
     }
     rgb(temp[, 1], temp[, 2], temp[, 3], maxColorValue = 255)
 }
+
 

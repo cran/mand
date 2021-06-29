@@ -1,0 +1,419 @@
+---
+title: "Common Statistical Approach"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    fig_width: 5
+    fig_height: 5
+  pdf_document:
+    toc: true
+    highlight: tango
+    fig_width: 3
+    fig_height: 3
+  rmarkdown::html_vignette:
+vignette: >
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteIndexEntry{3 Common Statistical Approach}
+  %\VignetteEncoding[UTF-8]{inputenc}
+---
+
+<!--
+%\VignetteEngine{knitr::knitr}
+%\\VignetteIndexEntry{mand}
+-->
+
+`r Sys.Date()` @Atsushi Kawaguchi
+
+
+```{r echo=FALSE, error=FALSE}
+options(warn=-1)
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+In this vignette, the output is omitted.
+Please refer to the following book for the output.
+
+Kawaguchi A. (2021). Multivariate Analysis for Neuroimaging Data. CRC Press.
+
+
+# Random Field Theory
+In this section, we explain the formation of clusters in a 1D Gaussian random field and how smoothing affects the cluster formation.
+
+## Original data and function
+The example data is 1D Gaussian random filed. The number of coordinates was set to 20, numbered from 1 to 20, and a normal random number was generated at each coordinate and converted to an absolute value.
+```{r}
+n = 20; x = 1:n
+set.seed(1); y = abs(rnorm(n)); names(y) = x
+```
+
+This is the conversion function for the plot with different colors of above and below cdt.
+```{r}
+cuty = function(y1, cdt){
+rbind(ifelse(y1-cdt<0, y1, cdt), 
+ifelse(y1-cdt<0, 0, y1-cdt))
+}
+```
+
+## Differences with CDT ##########
+The clusters are plotted with the bar above the cdts (0.5 and 1.5) coloring. 
+```{r fig.width = 7, fig.height = 4}
+par(mfrow=c(1, 2), mar=c(4,3,4,3))
+for(cdt in c(0.5, 1.5)){
+y2 = cuty(y, cdt)
+barplot(y2, col=c(8,2), main=paste("CDT =", cdt))
+abline(h = cdt, lty=2, col=2)
+}
+```
+
+The smaller the CDT, the more clusters are likely to be created. On the other hand, when the number of clusters is considered to be too large, it is better to use a large CDT. However, as in this example, the values of adjacent coordinates are different and the probability fields with large variations require smoothing.
+
+## FWHM and cluster above CDT
+For smoothed data, the clusters are ploted with different FWHM values (2 and 8).
+The CDT is fixed at 0.75.
+```{r}
+cdt = 0.75
+```
+
+```{r fig.width = 7, fig.height = 4}
+par(mfrow=c(1,2), mar=c(4,3,4,3))
+for(f1 in c(2,8)){
+sy = gsmooth(x, y, f1); y2 = cuty(sy, cdt)
+barplot(y2, col=c(8,2), main=paste("FWHM =", f1), ylim=c(0,2))
+abline(h = cdt, lty=2, col=2)
+}
+```
+
+As shown in the figure, 
+the low smoothness (FWHM = 2) yields small cluster size, the large number of clusters, and the narrow cluster.
+On the other hands, 
+The high (FWHM = 8) yields large cluster size, the small number of clusters, and the wide cluster.
+
+
+# Simple example for cluster size test
+
+## Cluster Level Inference
+```{r}
+exp(-0.53*(96/325*3.3*(3.3^2-1)^(2/3)))
+```
+
+```{r}
+s=96; h=3.3; r=325;
+Es=(4*log(2))^(3/2)*h*(h^2-1)/(2*pi)^(3/2);
+d=(gamma(5/2)*Es)^(2/3);
+exp(-d*(s/r)^(2/3))
+```
+
+```{r}
+(325*(-log(0.05)/0.53)^(3/2))/(3.3*(3.3^2-1))
+```
+
+
+## Cluster p-value 
+We illustrate how the p-value changes as FWHM changes for cluster sizes s = 1, 10, and 50. 
+The CDT is fixed at 4.
+```{r}
+ss = c(1, 10, 50)
+h = 4
+b = (4*log(2)/(2*pi))*(gamma(5/2))^(2/3)
+fs = 2:10
+```
+
+```{r fig.width = 5, fig.height = 3.5}
+par(mar=c(2,2,2,6))
+for(sidx in 1:length(fs)){
+p = exp(-b*(ss[sidx]/fs^3*h*((h)^2-1))^(2/3))
+if(sidx == 1){
+plot(fs, p, lty = sidx, type="l", ylim=c(0,1),
+xlab="FWHM", ylab="p-value", main="")
+}else{
+points(fs, p, lty = sidx, type="l")
+}}
+abline(h=0.05, lty=5, lwd=2)
+par(xpd=TRUE)
+legend(par()$usr[2], par()$usr[4], 
+legend=paste("s =", ss[order(ss)]), lty=order(ss))
+```
+
+In this way, it appears that the power is higher if it is not smooth, but it should be noted that if it is not smooth enough, we can only obtain clusters with small cluster sizes. Here we have an extreme s=1 example, which is not significant by 5% in any FWHM. Since too large a FWHM is unlikely to be significant, an appropriate value for the FWHM should be set in the pretreatment. This will be discussed later, but 8mm is recommended, which is also the default for SPM.
+
+# TFCE
+
+The following function computes the integrated values of the threshold-free cluster enhancement (TFCE) at each cdt.
+```{r}
+TFCE0 = function(y1, cdt, E=0.5, H=2){
+cy = 1*(y1 >= cdt)
+
+clsta0 = c(1, as.numeric(names(which(diff(cy)!=0))))
+clend0 = c(clsta0[-1]-1, length(cy))
+clsta = clsta0[cy[clsta0]==1]
+clend = clend0[cy[clsta0]==1]
+
+clustidxs = lapply(1:length(clsta), 
+function(i) clsta[i]:clend[i])
+clustsize = unlist(lapply(clustidxs, length))
+
+x = 1:length(y1)
+clust = unlist(lapply(x, function(x1){
+a = which(unlist(lapply(clustidxs, 
+function(cidx) x1 %in% cidx)))
+ifelse(length(a)>0, a, NA)
+}))
+
+a = clustsize[clust]^E * cdt^H
+ifelse(is.na(a),0, a)
+}
+```
+
+This function supports the plot.
+```{r}
+TFCE1 = function(f1){
+for(cdt1 in cdts2){
+sy = gsmooth(x, y, f1)
+y2 = cuty(sy, cdt1)
+barplot(y2, col=c(8,2), main=paste("CDT =", cdt1))
+abline(h = cdt1, lty=2, col=2)
+tfce = TFCE0(sy,cdt1)
+barplot(tfce, main=paste("TFCE CDT =", cdt1), ylim=c(0,10))
+}
+}
+```
+
+## TFCE process
+The TFCE procedure process is explained with CDTs = 0.75, 0.5 and 0.25, and FWHM = 2 in the following code.
+```{r fig.width = 6, fig.height = 5}
+cdts2 = c(0.75, 0.5, 0.25)
+par(mfrow=c(length(cdts2), 2), mar=c(3,4,2,4))
+TFCE1(f1=2)
+```
+
+The values in the right column are computed for each coordinate, but if they belong to the same cluster, the values (the heights of the bars) are equal.
+
+## FWHM and TFCE 
+The different FWHM values produce the different TFCEs and the moderate FWHM value is preferable.
+```{r fig.width = 7, fig.height = 6}
+f1s = c(0, 2, 4, 8)
+par(mfrow=c(length(f1s),2), mar=c(3,4,2,4))
+for(f1 in f1s){
+if(f1 == 0){barplot(y, main="Original")}else{
+sy = gsmooth(x, y, f1)
+barplot(sy, main=paste("FWHM =", f1), ylim=c(0,2))
+}
+if(f1 > 0){ sy = gsmooth(x, y, f1) }else{ sy = y }
+cdts = c(0, sort(unique(sy)))
+tfce = colSums(do.call(rbind,lapply(cdts, function(cdt1){
+TFCE0(sy,cdt1)
+})))
+barplot(tfce, main=paste("TFCE FWHM =", f1))
+}
+```
+
+TFCE is also affected by smoothing range; when the FWHM is large, a large area is likely to be detected, and conversely, when the FWHM is small, there is more variability, making it difficult to obtain useful findings. Therefore, it is necessary to set an appropriate value of FWHM in preprocessing in the case of TFCE as well.
+
+
+# Permutation test
+First, the data is prepared.
+```{r}
+n = 5; x0 = rep(c(0,1), each = n)
+set.seed(1); y = ifelse(x0==0, rnorm(n, 0), rnorm(n, 1))
+```
+
+Assuming that the number of data in one group is 5, the dummy variables with x0 = 0 for the control and x0 = 1 for the case are used as explanatory variables. For the objective variable, a random number is generated from a normal distribution such that the control average is 0 and the case average is 1.
+
+Next, prepare a function to calculate the test statistic of the t-test.
+```{r}
+fitfunc = function(idx){
+x = x0[idx]
+fit = summary(lm(y~x))
+coef(fit)[2,1:3]
+}
+```
+
+The argument idx specifies the order of dummy variables that are explanatory variables. By replacing idx with 1,2,3,...,10, the analysis result for the original data without replacement can be obtained. Regression analysis is performed using the explanatory variable and the objective variable specified by idx. That is, the design matrix consists of two columns: an intercept and a group dummy variable. Then, the estimated values of the regression coefficient, standard error, and test statistic are output.
+
+Calculate the test statistic of the t-test from the data. idx is set to 1,2,3,...,10.
+```{r}
+(fit0 = fitfunc(1:(2*n)))
+```
+
+This is the estimation result for the original data. To make a statistical guess for this result, we replace the dummy variables and find the null distribution.
+
+Prepare a randomly replaced index and calculate the test statistic of the t-test again. By resetting the seed of the random number, the test statistic for three types of permutation is calculated.
+```{r}
+set.seed(1); idx = sample(2*n); round(fitfunc(idx), 3)
+
+set.seed(2); idx = sample(2*n); round(fitfunc(idx), 3)
+
+set.seed(1000); idx = sample(2*n); round(fitfunc(idx), 3)
+```
+
+The above steps are repeated to output only test statistics.
+```{r}
+tststs = sapply(1:1000, function(s1){
+set.seed(s1); idx = sample(2*n); fitfunc(idx)[3]
+})
+```
+
+1000 test statistics are obtained.
+Calculate these 97.5% quantile (the two-sided significance level of 5% rejection).
+```{r}
+(q1 = quantile(tststs, prob=0.975))
+ifelse(abs(fit0[3])>q1, "reject", "not reject")
+```
+
+The test statistic before the swap was below the quantile; therefore, the null hypothesis is not rejected. From the t-distribution density function with eight degrees of freedom, which is the theoretical distribution, the rejection region is obtained by integration of the density function.
+```{r}
+(q2 = qt(0.975, 2*n-2) )
+ifelse(abs(fit0[3])>q2, "reject", "not reject")
+```
+
+In this example, it is almost the same as that obtained by the replacement.
+
+In the figure, the test statistic obtained by 1000 permutations is represented as a histogram. The figure also plots the t distribution density function with eight degrees of freedom, which is the theoretical distribution. 
+```{r fig.width = 4, fig.height = 3.5}
+hist(tststs, xlab="T stat", main="", freq=FALSE, 
+ylim=c(0, 0.4))
+abline(v=fit0[3], col=2, lty=2)
+abline(v=q1, col=4, lty=3); abline(v=q2, col=3, lty=4)
+f1 = function(x)dt(x, 2*n-2)
+curve(f1, -5, 5, add=TRUE, col=3)
+```
+
+The test statistic obtained from the data is indicated by a dashed line, quantiles from the permutation distribution are indicated by a dotted line, and quantiles from the theoretical distribution are indicated by a dashed and dotted line.
+It also seems to fit the histogram obtained by permuting. It can be seen that the rejection area is wider in the permutation test (the quantile is smaller).
+
+Next, the p-value is calculated. The p-value is the percentage of values obtained by swapping values that are higher than the test statistic is doubled on both sides.
+```{r}
+(pp = 2*(mean(tststs > fit0[3])))
+```
+
+In this case, the null hypothesis is not rejected at the significance level of 5%.
+
+We compute the p-value of the t-test for comparison.
+```{r}
+(tp = 2*(1 - pt(fit0[3], 2*n-2)))
+```
+
+In this example, the theoretical distribution is a more conservative test.
+
+To obtain a more reliable distribution, a larger number of samples is needed. The number of samples corresponds to the number of permutations. Here, a simple experiment was performed as follows.
+```{r}
+nreps = round(c(seq(10, 100, length=10), 
+seq(200, length(tststs)-100, length=10)))
+q1s = sapply(nreps, function(x) {
+sapply(1:1000, function(y) {
+set.seed(y); quantile(tststs[sample(1:length(tststs), x)], 
+0.975)})})
+colnames(q1s)=nreps
+```
+
+From the test statistic obtained by the 1000 permutations, the number of permutations is randomly taken to calculate the quantile. There were one thousand extractions.
+
+A box plot was created with the number of permutations on the horizontal axis and the quantiles on the vertical axis.
+```{r fig.width = 4, fig.height = 3.5}
+boxplot(q1s, main="", xlab="Number of permutations",
+ylab="Two-sided 95% point", type="b")
+abline(h=q2, col=3, lty=2)
+```
+
+As the number of permutations increases, the variation in quantiles is small and stable. In this way, a reliable distribution can be obtained by increasing the number of replacements. However, as the number of replacements increases, the more calculation time is required and the more the calculation time must be taken into account.
+
+# Permutation based multiple correction
+
+A cluster is formed from a one-dimensional random field that exceeds a certain threshold (= CDT) and the size of the cluster is tested. Multiple corrections are necessary because there can be multiple clusters. One way to control FWER is to consider the distribution of the maximum values of multiple statistics. Here, the method is explained. First, the function to be used should be prepared.
+```{r}
+clustsize = function(y1, cdt){
+cy = 1*(y1 >= cdt)
+
+if(all(cy==0)){
+clustsize = 0
+}else{
+clsta0 = c(1, as.numeric(names(which(diff(cy)!=0))))
+clend0 = c(clsta0[-1]-1, length(cy))
+clsta = clsta0[cy[clsta0]==1]
+clend = clend0[cy[clsta0]==1]
+
+clustidxs = lapply(1:length(clsta), 
+function(i) clsta[i]:clend[i])
+clustsize = unlist(lapply(clustidxs, length))
+}
+clustsize
+}
+```
+ 
+```{r}
+gsmooth = function(x, y, FWHM){
+sigma = FWHM / 2*sqrt(2*log(2))
+sy = sapply(x, function(x1) 
+weighted.mean(y, 
+dnorm(x, x1, sigma)/sum(dnorm(x, x1,sigma))) )
+names(sy) = x
+sy
+}
+```
+
+```{r}
+cuty = function(y1, cdt){
+rbind(ifelse(y1-cdt<0, y1, cdt), 
+ifelse(y1-cdt<0, 0, y1-cdt))
+}
+```
+
+The next step is to set up the data.
+The number of coordinates in the random field is 20. The random field generated by normal random numbers is smoothed with FWHM = 2. From there, CDT = 0.75 forms adjacent coordinates as clusters.
+```{r}
+n = 20; x = 1:n; f1 = 2; cdt1 = 0.75
+```
+
+Next, calculate the cluster size (the number of coordinates) as well as the maximum value. Repeat this process four times.
+```{r fig.width = 7, fig.height = 6}
+sidxs = 1:4
+par(mfrow=c(length(sidxs),1), mar=c(3,4,2,4))
+for(sidx in sidxs){
+sigma1 = ifelse(sidx==1, 1, 0.9)
+set.seed(sidx); y = abs(rnorm(n,0,sigma1)); names(y) = x
+sy = gsmooth(x, y, f1); y2 = cuty(sy, cdt1)
+csize = clustsize(sy, cdt1)
+barplot(y2, col=c(8,2), 
+main=paste("Max Cluster Size =", max(csize)), ylim=c(0,1.2))
+abline(h = cdt1, lty=2, col=2)
+}
+```
+
+The result is the resulting figure. In the first row, there are two clusters, the sizes of which are 3 and 5, so the maximum value is 5. 
+By doing the same in the second to the fourth row, the maximum values of the cluster sizes are calculated as 4, 4 and 7 as shown at the top of the figure.
+
+Here, random numbers were generated as 20 test statistics and by repeating the random numbers, four different random fields were generated. Assume a random field with 20 test statistics obtained by transposing the GLM design matrix as seen earlier. That is, as the maximum cluster size observed in the first row, thethe null distribution is created by the second and subsequent cluster size maximums. This time, the following code is used to create a distribution with 1000 repetitions.
+```{r}
+sidxs2 = 1:1001
+maxcsizes = sapply(sidxs2, function(sidx){
+sigma1 = ifelse(sidx==1, 1, 0.9)
+set.seed(sidx); y = abs(rnorm(n,0,sigma1)); names(y) = x
+sy = gsmooth(x, y, f1)
+csize = clustsize(sy, cdt1)
+max(csize)
+})
+(obs = maxcsizes[1])
+(q1 = quantile(maxcsizes[-1], 0.95))
+```
+
+The resulting histogram is shown here. The 95% quantile is the rejection threshold. 
+In this case, the result is that the null hypothesis is not rejected.
+```{r fig.width = 4, fig.height = 3.5}
+hist(maxcsizes, main="", xlab="Max Cluster Size")
+abline(v = q1, col=2, lty=2); abline(v = obs, col=3, lty=2)
+```
+
+As in the previous section, quantile points (rejection limit points) at a certain number of iterations were randomly extracted and the distribution of quantile points at each number of iterations was illustrated.
+```{r fig.width = 4, fig.height = 3.5}
+nreps = seq(10, length(maxcsizes), length=100)
+q1s = sapply(nreps, function(x) 
+quantile(maxcsizes[2:x], 0.95))
+par(mfrow=c(1,1))
+plot(nreps, q1s, main="", xlab="Number of permutations",
+ylab="95% point", type="b")
+```
+
+As a result, the convergence appears to have begun to some extent with the number of iterations. Since it is necessary to perform experiments with various settings, it is better to perform as many iterations as possible, rather than determining a small number of iterations.
+
+

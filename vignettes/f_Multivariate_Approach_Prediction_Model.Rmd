@@ -1,0 +1,558 @@
+---
+title: "Prediction Model"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    fig_width: 5
+    fig_height: 5
+  pdf_document:
+    toc: true
+    highlight: tango
+    fig_width: 3
+    fig_height: 3
+  rmarkdown::html_vignette:
+vignette: >
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteIndexEntry{4.2 Prediction Model}
+  %\VignetteEncoding[UTF-8]{inputenc}
+---
+
+`r Sys.Date()` @Atsushi Kawaguchi
+
+
+```{r echo=FALSE, error=FALSE}
+options(warn=-1)
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+In this vignette, the output is omitted.
+Please refer to the following book for the output.
+
+Kawaguchi A. (2021). Multivariate Analysis for Neuroimaging Data. CRC Press.
+
+
+# Data reshape
+
+## Preparation
+First, we prepare and then we create the data matrix.
+Install package (as necessary)
+
+```{r}
+if(!require("mand")) install.packages("mand")
+```
+
+Load package
+```{r}
+library(mand)
+```
+
+The supervised sparse principal component analysis is implemented as in the previous section and the score is extracted. The objective binary variable Z is transformed to the factor variable with case when Z=1 and control when Z=0 and stored as a dataset with the score. 
+```{r}
+fit113 = msma(SB1, Z=Z, comp=2, lambdaX=0.075, muX=0.5)
+Ss = fit113$ssX 
+colnames(Ss) = paste("c", c(1:ncol(Ss)), sep="")
+swdata113 = data.frame(
+Z = as.factor(ifelse(Z == 1, "Y", "N")), Ss)
+```
+
+The resulting dataset is used to create a predictive model.
+
+# Logistic Regression Model
+
+Fit the logistic model with the `glm` function and displaying the glm fit results.
+```{r}
+glmfit = glm(Z~., data=swdata113, family=binomial)
+summary(glmfit)
+```
+
+In this example, neither of the two components is significant by 5%, but a smaller p-value can be obtained if only C1 is used. Convergence does not seem to have worked (the number of iterations: 25).
+
+Next the diagnostic probabilities are computed and are transformed into a binary variable that may or may not be greater than or equal to 0.5.
+```{r}
+test = predict(glmfit, type="response")>=0.5
+```
+
+Creation of a confusion table (input and output are performed simultaneously by enclosing in parentheses).
+```{r}
+(err.table = table(swdata113$Z, test))
+```
+
+The confusion matrix can be calculated as follows to obtain the classification error rate, that is, it is the proportion of the non-diagonal component.
+```{r}
+1 - sum(diag(err.table)) / sum(err.table)
+```
+
+The discrimination is perfect. The significance of the coefficients and discriminant performance seem to be irrelevant. However, this is a result of training data alone, and discriminant ability should be measured by independent test data. This will be discussed in a later section.
+
+The confusion matrix can also be calculated as follows to obtain sensitivity, specificity, false positive rate and false negative rate.
+```{r}
+t(apply(err.table, 1, function(x) x / sum(x)))
+```
+
+In this example, it is arranged as follows.
+```{r}
+matrix(
+c("specificity", "false positive rate", 
+"false negative rate","sensitivity")
+, ncol=2)
+```
+
+Next, we draw a probability plot with component 1 score on the horizontal axis and component 2 score on the vertical axis, and plot the probability values in different colors.
+```{r fig.width = 5, fig.height = 3.5}
+x = seq(min(swdata113$c1), max(swdata113$c1), length = 30)
+y = seq(min(swdata113$c2), max(swdata113$c2), 
+length = length(x))
+prob = function(x, y) 1/(1+exp(-predict(glmfit, 
+newdata=data.frame(c1=x, c2=y))))
+z = outer(x, y, prob)
+filled.contour(x,y,z, xlab="Component 1", ylab="Component 2")
+```
+
+Since the boundary line with a probability of 0.5 is almost perpendicular to the abscissa, it seems that component 1 is more effective for discrimination.
+
+# Support Vector Machine
+
+To run the support vector machine, load the `e1071` package.
+```{r, message=FALSE}
+library(e1071)
+```
+
+The `tune` function of the `e1071` package is used to find the optimal tuning parameters. The tuning parameters are $\sigma$ in the Gaussian kernel (`gamma`) and the influence degree C of the slack variable (`cost`). By setting the cross to the sample size, the leave-one-out cross-validation method is used, and the classification error is used as a performance indicator.
+```{r}
+set.seed(1)
+tuneSVM = tune(svm, Z~., data=swdata113, 
+ranges = list(gamma = 2^(0:2), cost = c(4, 6, 8)),
+tunecontrol = tune.control(cross = nrow(swdata113)))
+```
+
+The results of the tuning (table and plot) are as follows. 
+```{r}
+summary(tuneSVM)
+```
+
+A grid search was performed to calculate the errors for all combinations of tuning parameters and to optimize the parameters with their minimum values. With tuning parameters on the horizontal and vertical axes, a color-coded plot of the classification errors is drawn as follows.
+```{r fig.width = 5, fig.height = 3.5}
+plot(tuneSVM, color.palette = heat.colors)
+```
+
+The optimal parameters can be extracted as follows.
+```{r}
+bestGamma = tuneSVM$best.parameters$gamma
+bestC = tuneSVM$best.parameters$cost
+```
+
+The fit of the SVM with the optimal parameters is performed.
+```{r}
+set.seed(1)
+svmfit = svm(Z~., data=swdata113, 
+cost = bestC, gamma = bestGamma,
+probability=TRUE, kernel="radial", cross=nrow(swdata113))
+summary(svmfit)
+```
+
+Similar to logistic classification, the discrimination results by the SVM, confusion matrices and the classification errors are computed.
+```{r}
+pred = predict(svmfit, newdata=swdata113, probability=TRUE, 
+decision.values=TRUE)
+(err.table = table(swdata113$Z, pred))
+1 - sum(diag(err.table)) / sum(err.table)
+```
+
+The plot of the discriminant boundary is provided in the e1071 package with a special function.
+```{r fig.width = 5, fig.height = 3.5}
+plot(svmfit, swdata113, c2~c1)
+```
+
+It shows that the discrimination boundaries are nonlinear. Furthermore, as in the case of logistic classification, the component 1 score is valid for discrimination because it is almost perpendicular to the vertical axis.
+
+# Tree Model
+
+The tree model is used for discrimination. Since the tree model is more effective with more variables, the number of components is increased to 20.
+```{r}
+opt11 = optparasearch(SB1, Z=Z, comp=20, 
+search.method = "regparaonly", criterion="BIC")
+(fit311 = msma(SB1, Z=Z, 
+comp=opt11$optncomp, lambdaX=opt11$optlambdaX))
+Ss = fit311$ssX 
+colnames(Ss) = paste("c", c(1:ncol(Ss)), sep="")
+swdata311 = data.frame(
+Z = as.factor(ifelse(Z == 1, "Y", "N")), Ss)
+```
+
+The `rpart` package to run the tree model and the `rpart.plot` package to illustrate it are loaded.
+```{r}
+if(!require("rpart.plot")) install.packages("rpart.plot")
+library(rpart)
+library(rpart.plot)
+```
+
+Given the seed of the random number (to fix the result of CV), the tree model is fitted (default is Gini index) by using the `rpart` function. The minimum number of cases required in a node to be divided was set to 4 (= ` minsplit`).
+```{r}
+set.seed(1)
+(treefit = rpart(Z~., data=swdata311, 
+control = rpart.control(minsplit = 4)))
+```
+
+The tree is plotted. It is possible to use the function `prp` to draw a better looking tree than the default plot function, such as constant width between nodal points, number of individuals per group at branch points and all branch points.
+```{r}
+prp(treefit, type=4, extra=1, faclen=0, nn=TRUE)
+```
+
+The `rpart` function records CV classification errors for each complexity parameter corresponding the number of splits (`nsplit`) when it is executed. It can be shown as follows.
+```{r}
+printcp(treefit)
+```
+
+This result is plotted as follows, where size of tree is expressed in terms of the number of leaves.
+```{r}
+plotcp(treefit)
+```
+
+These results indicate that the number of leaves is 2, i.e. up to the first bifurcation, for good classification.
+
+Pruning to reduce wasteful branching is performed by setting the cp value as follows.
+```{r}
+(treefit1 = prune(treefit, cp=0.05))
+```
+
+It is also possible to specify a leaf number and prune below it.
+```{r}
+(treefit2 = snip.rpart(treefit, 7))
+```
+
+Graphic representation of a pruned Tree.
+```{r}
+prp(treefit2, type=4, extra=1, faclen=0, nn=TRUE)
+```
+
+Predict training data. Specify type and set for discrimination.
+```{r}
+pred = predict(treefit2, type="class")
+```
+
+Create a table of discrimination results and labels.
+```{r}
+(err.table = table(swdata311$Z, pred))
+```
+
+Calculation of classification error rate.
+```{r}
+1 - sum(diag(err.table))/sum(err.table)
+```
+
+Only one case was misclassified.
+
+# Random Forests
+
+To begin, we prepare a partial dataset of only six cases to illustrate the bootstrapping method used in random forests.
+```{r}
+swdata3112 = head(swdata311)
+```
+
+Set the seed of the random number, id=1,2,...,6 to extract six numbers at random, allowing for duplication.
+```{r}
+set.seed(1)
+(idrand = sample(1:6, replace=TRUE))
+```
+
+The rows corresponding to these numbers are taken from the dataset, and the resulting is the bootstrap dataset.
+```{r}
+(bsample = swdata3112[idrand, 1:4])
+```
+
+The OOB dataset is composed of rows not included in the bootstrap dataset.
+```{r}
+(oobsample = swdata3112[!(1:nrow(swdata3112) %in% 
+unique(idrand)), 1:4])
+```
+
+Load randomForest package and the e1071 package for the tuning selection (assuming it is installed).
+```{r}
+library(randomForest)
+library(e1071)
+```
+
+Set random number seed, the selection of tuning parameters is implemented by leave-one-out CV using the tune function of the e1071 package. 
+```{r}
+set.seed(1)
+tuneRF = tune(randomForest, Z~., data=swdata311,
+ranges = list(mtry = c(4,6,8), ntree = c(300, 500, 1000), 
+nodesize= c(1,2,3)),
+tunecontrol = tune.control(cross = nrow(swdata311)))
+```
+
+Tuning parameters are the number of candidate variables for the split (mtry), the number of trees (ntree) and the node size for each tree (nodesize).
+
+The results of the tuning (table and plot) are as follows.
+```{r}
+summary(tuneRF)
+```
+
+The optimized tuning parameters are retrieved in the following manner.
+```{r}
+bestmtry = tuneRF$best.parameters$mtry
+bestntree = tuneRF$best.parameters$ntree
+bestnodesize = tuneRF$best.parameters$nodesize
+```
+
+Setting random number seed, the random forest using selected parameters is implemented. The proximity is also calculated.
+```{r}
+set.seed(1)
+(rffit = randomForest(Z~., data=swdata311, proximity=TRUE, 
+mtry = bestmtry, ntree = bestntree, nodesize=bestnodesize))
+```
+
+The Variable importance (VI)s are plotted in the order of their values.
+```{r fig.width = 5, fig.height = 5}
+varImpPlot(rffit)
+```
+
+As in the Tree model, we found that component 6 was the most important in the model.
+
+The loading for the component 6 was overlaid on the brain image.
+```{r}
+Q = fit311$wbX[[1]][,6]
+outstat1 = rec(Q, img1$imagedim, B=B1, mask=img1$brainpos)
+outstat2 = -outstat1
+coat(template, outstat2)
+```
+
+```{r}
+atlastable(tmpatlas, outstat2, atlasdataset)
+```
+
+This component represents the area around the left hippocampus.
+
+The prediction on training data is implemented with specifying type for discrimination.
+```{r}
+pred = predict(rffit, type="class")
+```
+
+A confusion matrix of discrimination results and labels is created.
+```{r}
+(err.table = table(swdata311$Z, pred))
+```
+
+Calculation of misclassification rate.
+```{r}
+1 - sum(diag(err.table))/sum(err.table)
+```
+
+In this case, six cases were misclassified.
+
+Calculation of sensitivity, specificity, false positive, false negative
+```{r}
+t(apply(err.table, 1, function(x) x / sum(x)))
+```
+
+To illustrate how each explanatory variable is affected, a partial plot can be made as follows.
+```{r fig.width = 6, fig.height = 3.5}
+par(mfrow=c(1,2))
+partialPlot(rffit, swdata311, c1)
+partialPlot(rffit, swdata311, c2)
+```
+
+The proximity plot, which represents the similarity between the cases, is drawn as follows.
+```{r fig.width = 4.5, fig.height = 3}
+par(mfrow=c(1,1), mar=c(3,3,3,8))
+z = rffit$proximity
+n = nrow(swdata311)
+filled.contour(x=1:n, y=1:n, z=z, color = terrain.colors)
+```
+
+The result was that the first 10 cases were similar to each other and the second 10 cases were also similar to each other. The following two analyses can be performed from this proximity.
+
+The multidimensional scaling (MDS) method, which is a method of arranging the similarities between individuals, with those that are similar in two-dimensional space close together and those that are not, far apart, is performed in the following way. 
+```{r fig.width = 4.5, fig.height = 3}
+par(mfrow=c(1,1), mar=c(4,3,2,2))
+MDSplot(rffit, factor(swdata311$Z), 
+pch=as.numeric(swdata311$Z)-1)
+```
+
+In this two-dimensional plot, individuals have different markers for each group. This figure also shows that the three members of each group are in positions where they are likely to be misclassified.
+
+The outlier degree is calculated from the inverse of the mean value of each individual proximity and plotted as follows.
+```{r fig.width = 3.5, fig.height = 3}
+par(mfrow=c(1,1), mar=c(4,3,2,2))
+plot(randomForest::outlier(rffit), type="h", 
+col= as.numeric(swdata311$Z))
+```
+
+The results also show that there are three cases in each group that are different from the others.
+
+# Evaluation
+
+Phenotypes such as disease status are identified by the regression model from brain image data. There are conventional functions in the Classification And REgression Training (`caret`) package that evaluate the predictive performance of this model.
+
+For external verification, the test data with 500 subjects in one group independent of training data is generated by the caret function as follows. 
+```{r}
+img2 = simbrain(baseimg = baseimg, diffimg = diffimg2,  
+sdevimg=sdevimg, mask=mask, n0=500, c1=0.01, sd1=0.1, 
+zeromask=FALSE, seed=2)
+```
+
+The binary outcome should be converted into the factor to use the `caret` package.
+```{r}
+testZ = as.factor(ifelse(img2$Z == 1, "Y", "N"))
+```
+
+The dimensions of the image data are reduced by the basis function.
+```{r}
+SB2 = basisprod(img2$S, B1)
+```
+
+## Logistic regression model 
+
+The `ptest` function is based on the caret package and uses the output of the `msma` function to fit the classification model described in the previous section. 
+The logistic regression model is implemented with the argument regmethod = "glm" and the 5 repeated 10-fold cross validation is performed by default settings.
+```{r}
+ptest113 = ptest(object=fit113, Z=Z, newdata=SB2, 
+testZ=testZ, regmethod = "glm")
+```
+
+The following are the fitting results of the logistic regression.
+```{r}
+summary(ptest113$trainout$finalModel)
+```
+
+Here's a summary of the evaluation methods and training data results.
+```{r}
+ptest113$trainout
+```
+
+The model also evaluates the prediction performance of the test data (the dimension reduced SB2 and the testZ).
+```{r}
+ptest113$predcnfmat
+```
+
+In comparison, the output of `msma` function with $\mu=0$ is applied to the `ptest` function.
+```{r}
+ptest112 = ptest(object=fit112, Z=Z, newdata=SB2, testZ=testZ, 
+regmethod = "glm")
+ptest112$predcnfmat$overall["Accuracy"]
+```
+
+From the prediction accuracies for the method with the supervised PCA and for the original (unsupervised) PCA, the supervised PCA overperformed. 
+
+The input of the `ptest` function can be specified the data matrix instead of the `msma` fit.
+```{r}
+ptest311 = ptest(object=img1$S, Z=Z, newdata=img2$S, 
+testZ=testZ, regmethod = "glm")
+ptest312 = ptest(object=SB1, Z=Z, newdata=SB2, testZ=testZ, 
+regmethod = "glm")
+```
+
+The accuracy of the prediction based on the original data was slightly worse than that of the dimension reduced method.
+```{r}
+ptest311$predcnfmat$overall["Accuracy"]
+ptest312$predcnfmat$overall["Accuracy"]
+```
+
+From these results, it was found that the prediction accuracy was not high in the original image data matrix or by applying only basis functions.
+
+The supervision amount is controlled by the parameter $0\leq\mu\leq 1$.
+The larger value indicates stronger supervision (strongly correlated with outcome Z). 
+The effect of parameter $\mu$ is examined below.
+```{r}
+mus = seq(0, 1, by=0.25)
+comps = c(1,2,5,10)
+
+paramtest1 = lapply(comps, function(c1){lapply(mus, 
+function(mu1){
+tmpfit = msma(SB1, Z=Z, comp=c1, lambdaX=0.075, muX=mu1)
+tmpptest = ptest(object=tmpfit, Z=Z, newdata=SB2, 
+testZ=testZ, regmethod = "glm")
+tmpptest$predcnfmat
+})})
+
+out1 = do.call(rbind, lapply(paramtest1, function(x) 
+do.call(cbind, lapply(x, 
+function(y)y$overall["Accuracy"]))))
+rownames(out1)=comps; colnames(out1)=mus
+
+```
+
+The result shows the number of components in the row and the parameter $\mu$ values in the column.
+```{r results='asis'}
+kable(out1, "latex", booktabs = T)
+```
+
+## SVM 
+
+SVM is evaluated with regmethod = "svmRadial". The candidate tuning parameters are specified in the same way as in the previous section.
+```{r}
+svmgrid = expand.grid(sigma = c(0.001, 0.025, 0.05), 
+C = c(0.5, 0.75, 1))
+ptest211 = ptest(object=fit311, Z=Z, newdata=SB2, testZ=testZ, 
+regmethod = "svmRadial", metric="ROC", 
+param=svmgrid)
+ptest211$trainout
+```
+
+After the tuning parameters have been selected, the confusion matrix and predictive evaluation index for the test data are computed.
+```{r}
+ptest211$predcnfmat
+```
+
+This result was worse than the logistic regression model.
+
+## Tree 
+
+The tree model is evaluated by specifying regmethod = "rpart". The candidate tuning parameters are set to NULL, so that only the complexity is selected as the default setting.
+```{r}
+treegrid = NULL
+ptest212 = ptest(object=fit311, Z=Z, newdata=SB2, testZ=testZ, 
+regmethod = "rpart", metric="ROC", 
+param=treegrid)
+ptest212$trainout
+```
+
+The tree model according to the chosen complexity calculates the confusion matrix and the prediction accuracy metric in the test data.
+```{r}
+ptest212$predcnfmat
+```
+
+The results were similar to those of SVM.
+
+## Random Forest 
+
+The random forest is evaluated by specifying regmethod = "rf". The candidate tuning parameters are set to NULL, so that only the mtry is selected as the default setting.
+```{r}
+rfgrid  =  NULL
+ptest213 = ptest(object=fit311, Z=Z, newdata=SB2, testZ=testZ, 
+regmethod = "rf", metric="ROC", 
+param=rfgrid)
+ptest213$trainout
+```
+
+The random forests model according to the chosen mtry calculates the confusion matrix and the prediction accuracy metric in the test data.
+```{r}
+ptest213$predcnfmat
+```
+
+The results were similar to those of tree model.
+
+# Deep learning
+
+Since the `ptest` function depends on the `caret` package, it can specify the regression model which is available in the `caret` package.
+One of them is the `mxnet` function which is the deep learning.
+
+Firstly, the candidate parameters of the deep learning process are prepared.
+```{r}
+layers0 = c(1, 5, 10); layers1 = c(0, 1, 5, 10)
+rate0 = c(0, 0.25, 0.5, 0.75)
+activation=c("relu", "sigmoid", "tanh", "softrelu")
+mxnet.params = expand.grid(layer1=layers0, layer2=layers1, 
+layer3=0, learning.rate=0.1, momentum=0.9, dropout=0, 
+activation=activation[3])
+```
+
+The deep learning model is implemented by selecting the parameter as follows.
+```{r eval=FALSE}
+ptest215 = ptest(object=fit113, Z=Z, newdata=SB2, testZ=testZ, 
+regmethod = "mxnet", metric="Accuracy", 
+param=mxnet.params)
+ptest215$trainout
+```
+
