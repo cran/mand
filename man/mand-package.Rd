@@ -8,7 +8,7 @@
 A Package for implementation of multivariate data analysis for neuroimaging data.
 }
 \references{
-Kawaguchi A, Yamashita F (2017). Supervised Multiblock Sparse Multivariable Analysis with Application to Multimodal Brain Imaging Genetics. Biostatistics, 18(4) 651-665.
+Kawaguchi, A. (2021). Multivariate Analysis for Neuroimaging Data. CRC Press.
 }
 \author{
 Atsushi Kawaguchi. \email{kawa_a24@yahoo.co.jp}

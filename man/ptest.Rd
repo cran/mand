@@ -40,7 +40,17 @@ ptest(
 \item{params}{a data frame with possible tuning values.}
 }
 \value{
-\item{}{predict results}
+\item{object}{{an object of class "\code{msma}", usually, a result of a call to \code{msma}}}
+
+\item{trainout}{a predictive model output from the train function in the caret package with scores computed by the msma function as predictors}
+
+\item{scorecvroc}{the training evaluation measure and values of the tuning parameters}
+
+\item{evalmeasure}{evaluation measures and information criterion for the msma model}
+
+\item{traincnfmat}{a confusion matrix in training data}
+
+\item{predcnfmat}{a confusion matrix in test data}
 }
 \description{
 This is the function that creates and evaluates the predictive model.

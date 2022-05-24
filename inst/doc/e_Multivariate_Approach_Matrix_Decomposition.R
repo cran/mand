@@ -156,9 +156,9 @@ knitr::opts_chunk$set(eval = FALSE)
 
 ## ----fig.width = 7, fig.height = 4--------------------------------------------
 #  par(mfrow=c(1,2))
-#  plot(lambdaXs, BICs, ylab="BIC")
+#  plot(lambdaXs, BICs, xlab="lambda", ylab="BIC")
 #  abline(v=optlam, col="red", lty=2)
-#  plot(nzwbXs, BICs, ylab="", log="x")
+#  plot(nzwbXs, BICs, xlab="Number of non-zeros", ylab="BIC", log="x")
 #  abline(v=optnzw, col="red", lty=2)
 
 ## -----------------------------------------------------------------------------
@@ -204,7 +204,6 @@ knitr::opts_chunk$set(eval = FALSE)
 ## -----------------------------------------------------------------------------
 #  (ncomp2 = ncompsearch(SB1, Z=Z, muX=0.5,
 #  comps = c(1, seq(5, 30, by=5)), criterion="CV"))
-#  
 
 ## ----fig.width = 7, fig.height = 4--------------------------------------------
 #  par(mfrow=c(1,2))
@@ -223,40 +222,30 @@ knitr::opts_chunk$set(eval = FALSE)
 
 ## ----results='asis'-----------------------------------------------------------
 #  opts1=t(opts)
-#  colnames(opts1) = c("#comp", "lambda",
-#  paste("comp",1:maxncomp))
+#  colnames(opts1) = c("#comp", "lambda", paste("comp",1:maxncomp))
 #  kable(opts1, "latex", booktabs = T)
 
 ## ----fig.width = 4, fig.height = 3.5------------------------------------------
-#  (ncomp3 = ncompsearch(SB1, Z=Z, muX=0.5,
-#  lambdaX=0.075, comps = 30, criterion="BIC"))
+#  (ncomp3 = ncompsearch(SB1, Z=Z, muX=0.5, lambdaX=0.075, comps = 30, criterion="BIC"))
 #  plot(ncomp3)
 
 ## -----------------------------------------------------------------------------
-#  (opt11 = optparasearch(SB1, Z=Z, muX=0.5, comp=5,
-#  search.method = "regparaonly", criterion="BIC"))
+#  (opt11 = optparasearch(SB1, Z=Z, muX=0.5, comp=5, search.method = "regparaonly", criterion="BIC"))
 
 ## -----------------------------------------------------------------------------
-#  (fit311 = msma(SB1, Z=Z, muX=0.5,
-#  comp=opt11$optncomp, lambdaX=opt11$optlambdaX))
+#  (fit311 = msma(SB1, Z=Z, muX=0.5, comp=opt11$optncomp, lambdaX=opt11$optlambdaX))
 
 ## -----------------------------------------------------------------------------
-#  (opt12 = optparasearch(SB1, Z=Z, muX=0.5,
-#  search.method = "regpara1st", criterion="BIC"))
-#  fit312 = msma(SB1, Z=Z, muX=0.5,
-#  comp=opt12$optncomp, lambdaX=opt12$optlambdaX)
+#  (opt12 = optparasearch(SB1, Z=Z, muX=0.5, search.method = "regpara1st", criterion="BIC"))
+#  fit312 = msma(SB1, Z=Z, muX=0.5, comp=opt12$optncomp, lambdaX=opt12$optlambdaX)
 
 ## -----------------------------------------------------------------------------
-#  (opt13 = optparasearch(SB1, Z=Z, muX=0.5,
-#  search.method = "ncomp1st", criterion="BIC"))
-#  fit313 = msma(SB1, Z=Z, muX=0.5,
-#  comp=opt13$optncomp, lambdaX=opt13$optlambdaX)
+#  (opt13 = optparasearch(SB1, Z=Z, muX=0.5, search.method = "ncomp1st", criterion="BIC"))
+#  fit313 = msma(SB1, Z=Z, muX=0.5, comp=opt13$optncomp, lambdaX=opt13$optlambdaX)
 
 ## -----------------------------------------------------------------------------
-#  (opt14 = optparasearch(SB1, Z=Z, muX=0.5,
-#  search.method = "simultaneous", criterion="BIC"))
-#  fit314 = msma(SB1, Z=Z, muX=0.5,
-#  comp=opt14$optncomp, lambdaX=opt14$optlambdaX)
+#  (opt14 = optparasearch(SB1, Z=Z, muX=0.5, search.method = "simultaneous", criterion="BIC"))
+#  fit314 = msma(SB1, Z=Z, muX=0.5, comp=opt14$optncomp, lambdaX=opt14$optlambdaX)
 
 ## ----error=FALSE, message=FALSE-----------------------------------------------
 #  if(!require("NMF")) install.packages("NMF")

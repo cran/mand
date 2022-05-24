@@ -16,9 +16,6 @@ rec(Q, imagedim, B = NULL, mask = NULL)
 
 \item{mask}{a list or a matrix indicating the mask image used in the dimension reduction.}
 }
-\value{
-\item{}{a reconstructed array}
-}
 \description{
 This is a function that restores the vectorized image to its original dimensions, reduced in dimension by the radial basis function.
 }

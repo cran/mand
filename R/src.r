@@ -10,7 +10,7 @@
 #'
 #' @author Atsushi Kawaguchi. \email{kawa_a24@@yahoo.co.jp}
 #' @references 
-#' Kawaguchi A, Yamashita F (2017). Supervised Multiblock Sparse Multivariable Analysis with Application to Multimodal Brain Imaging Genetics. Biostatistics, 18(4) 651-665. 
+#' Kawaguchi, A. (2021). Multivariate Analysis for Neuroimaging Data. CRC Press.
 #' @import msma oro.nifti oro.dicom imager caret
 #' @importFrom graphics abline matplot plot par axis layout rect legend title mtext plot.new text
 #' @importFrom grDevices gray rainbow col2rgb rgb dev.size
@@ -185,8 +185,6 @@ B
 #' @param A a list or a matrix correponding to the output for the \code{rbfunc} function with the argument hispec=FALSE or data matrix, respectivey. 
 #' @param B a list or a matrix.
 #' 
-#' @return \item{}{a producted matrix}
-#' 
 #' @examples
 #' 
 #' imagedim1=c(10,10,10)
@@ -235,8 +233,6 @@ stop("Either A or B should be output of rbfunc")
 #' @param imagedim a vector for original dimension.
 #' @param B a list or a matrix indicating the basis function used in the dimension reduction.
 #' @param mask a list or a matrix indicating the mask image used in the dimension reduction.
-#' 
-#' @return \item{}{a reconstructed array}
 #' 
 #' @examples
 #' 
@@ -759,8 +755,6 @@ list(S=S, Z=Z, brainpos=brainpos, imagedim=imagedim)
 #' @param refsize a vector with length 3, which is a size to be changed.
 #' @param ... further arguments passed to or from other methods.
 #' 
-#' @return \item{}{size changed image}
-#' 
 #' @examples
 #' 
 #' data(exbrain)
@@ -811,7 +805,12 @@ img1r
 #' @param repeats1 a number of repeats for the repeated cross-validation
 #' @param params a data frame with possible tuning values. 
 #' 
-#' @return \item{}{predict results}
+#' @return \item{object}{{an object of class "\code{msma}", usually, a result of a call to \code{msma}}}
+#' @return \item{trainout}{a predictive model output from the train function in the caret package with scores computed by the msma function as predictors}
+#' @return \item{scorecvroc}{the training evaluation measure and values of the tuning parameters}
+#' @return \item{evalmeasure}{evaluation measures and information criterion for the msma model}
+#' @return \item{traincnfmat}{a confusion matrix in training data}
+#' @return \item{predcnfmat}{a confusion matrix in test data}
 #' 
 #' @examples
 #' 

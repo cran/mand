@@ -1,5 +1,5 @@
 ---
-title: "Matrix_Decomposition"
+title: "Matrix Decomposition"
 output:
   html_document:
     toc: true
@@ -302,9 +302,9 @@ BICs = unlist(lapply(fit114s, function(x) x$bic[2]))
 The plot of BIC values against the number of non-zero loadings and the $\lambda$.
 ```{r fig.width = 7, fig.height = 4}
 par(mfrow=c(1,2))
-plot(lambdaXs, BICs, ylab="BIC")
+plot(lambdaXs, BICs, xlab="lambda", ylab="BIC")
 abline(v=optlam, col="red", lty=2)
-plot(nzwbXs, BICs, ylab="", log="x")
+plot(nzwbXs, BICs, xlab="Number of non-zeros", ylab="BIC", log="x")
 abline(v=optnzw, col="red", lty=2)
 ```
 
@@ -375,6 +375,7 @@ The criterion can use not only BIC but also CV (Cross Validation).
 ```{r}
 (ncomp2 = ncompsearch(SB1, Z=Z, muX=0.5,
 comps = c(1, seq(5, 30, by=5)), criterion="CV"))
+```
 
 ```{r fig.width = 7, fig.height = 4}
 par(mfrow=c(1,2))
@@ -396,16 +397,14 @@ c(c1, round(opt,3), nz)
 
 ```{r results='asis'}
 opts1=t(opts)
-colnames(opts1) = c("#comp", "lambda", 
-paste("comp",1:maxncomp))
+colnames(opts1) = c("#comp", "lambda", paste("comp",1:maxncomp))
 kable(opts1, "latex", booktabs = T)
 ```
 
 From this result, it can be seen that when the number of components is large, a small non-zero loadings are selected for each component, and when the number of components is small, a large non-zero loadings are selected for each component.
 
 ```{r fig.width = 4, fig.height = 3.5}
-(ncomp3 = ncompsearch(SB1, Z=Z, muX=0.5, 
-lambdaX=0.075, comps = 30, criterion="BIC"))
+(ncomp3 = ncompsearch(SB1, Z=Z, muX=0.5, lambdaX=0.075, comps = 30, criterion="BIC"))
 plot(ncomp3)
 ```
 
@@ -414,40 +413,32 @@ The `msma` package has an `optparasearch` function and the `search.method` argum
 
 The `regparaonly` method searches for the regularized parameters with a fixed number of components (set to be 5 and 10 as the default).
 ```{r}
-(opt11 = optparasearch(SB1, Z=Z, muX=0.5, comp=5,
-search.method = "regparaonly", criterion="BIC"))
+(opt11 = optparasearch(SB1, Z=Z, muX=0.5, comp=5, search.method = "regparaonly", criterion="BIC"))
 ```
 
 The optimized parameters are used in the `msma` function as follows.
 ```{r}
-(fit311 = msma(SB1, Z=Z, muX=0.5, 
-comp=opt11$optncomp, lambdaX=opt11$optlambdaX))
+(fit311 = msma(SB1, Z=Z, muX=0.5, comp=opt11$optncomp, lambdaX=opt11$optlambdaX))
 ```
 
 The `regpara1st` identifies the regularized parameters by fixing the number of components, then searching for the number of components with the selected regularized parameters. Note that the default is to search up to 10 components.
 ```{r}
-(opt12 = optparasearch(SB1, Z=Z, muX=0.5, 
-search.method = "regpara1st", criterion="BIC"))
-fit312 = msma(SB1, Z=Z, muX=0.5, 
-comp=opt12$optncomp, lambdaX=opt12$optlambdaX)
+(opt12 = optparasearch(SB1, Z=Z, muX=0.5, search.method = "regpara1st", criterion="BIC"))
+fit312 = msma(SB1, Z=Z, muX=0.5, comp=opt12$optncomp, lambdaX=opt12$optlambdaX)
 ```
 
 The `ncomp1st` method identifies the number of components with a regularized parameter of 0, then searches for the regularized parameters with the selected number of components.
 ```{r}
-(opt13 = optparasearch(SB1, Z=Z, muX=0.5, 
-search.method = "ncomp1st", criterion="BIC"))
-fit313 = msma(SB1, Z=Z, muX=0.5, 
-comp=opt13$optncomp, lambdaX=opt13$optlambdaX)
+(opt13 = optparasearch(SB1, Z=Z, muX=0.5, search.method = "ncomp1st", criterion="BIC"))
+fit313 = msma(SB1, Z=Z, muX=0.5, comp=opt13$optncomp, lambdaX=opt13$optlambdaX)
 ```
 
 If the argument `criterion4ncomp` is specified as `criterion4ncomp="CV"`, only the criteria for selecting the number of components can be changed to CV.
 
 The `simultaneous` method identifies the number of components by searching the regularized parameters in each component.
 ```{r}
-(opt14 = optparasearch(SB1, Z=Z, muX=0.5, 
-search.method = "simultaneous", criterion="BIC"))
-fit314 = msma(SB1, Z=Z, muX=0.5, 
-comp=opt14$optncomp, lambdaX=opt14$optlambdaX)
+(opt14 = optparasearch(SB1, Z=Z, muX=0.5, search.method = "simultaneous", criterion="BIC"))
+fit314 = msma(SB1, Z=Z, muX=0.5, comp=opt14$optncomp, lambdaX=opt14$optlambdaX)
 ```
 
 In this example, the results were the same except for the`ncomp1st`.

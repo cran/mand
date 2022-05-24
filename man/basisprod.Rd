@@ -12,9 +12,6 @@ basisprod(A, B)
 
 \item{B}{a list or a matrix.}
 }
-\value{
-\item{}{a producted matrix}
-}
 \description{
 This is a function to product the output for the rbfunc function with data matrix for a dimension reduction.
 }

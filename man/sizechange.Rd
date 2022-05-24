@@ -16,9 +16,6 @@ sizechange(img1, simscale = NULL, refsize = NULL, ...)
 
 \item{...}{further arguments passed to or from other methods.}
 }
-\value{
-\item{}{size changed image}
-}
 \description{
 TThis is a function that changes the resolution of the image.
 }
