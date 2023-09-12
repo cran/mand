@@ -14,7 +14,7 @@
 #' @import msma oro.nifti oro.dicom imager caret
 #' @importFrom graphics abline matplot plot par axis layout rect legend title mtext plot.new text
 #' @importFrom grDevices gray rainbow col2rgb rgb dev.size
-#' @importFrom stats cor predict quantile rbinom rnorm runif aggregate
+#' @importFrom stats cor predict quantile rbinom rnorm runif aggregate dist integrate na.omit splinefun
 #' @importFrom utils data
 NULL
 
@@ -123,6 +123,7 @@ NULL
 #' @param seppix a numeric. distance between knots.
 #' @param hispec a logical. TRUE produces a matrix output. FALSE produces a list output to reduce the data memorry. 
 #' @param mask a vector. 
+#' @param brainpos a logical vector. 
 #' 
 #' @examples
 #' 
@@ -131,7 +132,7 @@ NULL
 #' B1 = rbfunc(imagedim=imagedim1, seppix=4, hispec=TRUE)
 #' B2 = rbfunc(imagedim=imagedim1, seppix=4, hispec=FALSE)
 #' 
-rbfunc = function(imagedim, seppix, hispec=FALSE, mask=NULL)
+rbfunc = function(imagedim, seppix, hispec=FALSE, mask=NULL, brainpos=NULL)
 {
 h = sqrt(sum(rep(seppix, length(imagedim))^2))
 g = function(r) ifelse(r <= h, h^3 + 3 * h^2 * (h - r) + 3 * h * (h - r)^2 - 3 * (h - r)^3, ifelse(r <= 2*h, (2*h - r)^3, 0)) / (4 * h^2)
@@ -140,6 +141,9 @@ v0 = as.matrix(expand.grid(lapply(imagedim, function(x) 1:x)))
 if(!is.null(mask)){
 v = v0[mask[v0] != 0, ]
 k = k0[mask[k0] != 0, ]
+}else if(!is.null(brainpos)){
+v = v0[brainpos[v0], ]
+k = k0[brainpos[k0], ]
 }else{
 v = v0
 k = k0
@@ -154,6 +158,7 @@ B = lapply(1:nrow(k), function(ki){
 k1 = k[ki, ]
 v1 = as.matrix(expand.grid(lapply(1:length(k1), function(x){ max(c(1, k1[x]-h2)) : min(c(k1[x]+h2,imagedim[x]))} )))
 if(!is.null(mask)) v1 = v1[mask[v1] != 0, ]
+if(!is.null(brainpos)) v1 = v1[brainpos[v1], ]
 b1 = apply(v1, 1, function(x) g(sqrt(sum((x - k1)^2))))
 nzidx = b1 > 0
 v2 = v1[nzidx,]
@@ -365,8 +370,10 @@ breaks.y = c(0, sort(ROIids)-0.5, max(ROIids)+1)
 y[!(y %in% ROIids)] = 0
 breaks.y = c(0, sort(ROIids)-0.5, max(ROIids)+1)
 }
-colors2 = c("red", "green3", "cyan", "magenta", "yellow", "brown", "antiquewhite", "aquamarine", "darkgoldenrod")
-col.y = c(NA, colors2[1:(length(breaks.y)-2)])
+#colors2 = c("red", "green3", "cyan", "magenta", "yellow", "brown", "antiquewhite", "aquamarine", "darkgoldenrod")
+colors2 = c("red", "green3", "orange", "magenta", "blue", "deeppink", "darkgreen", "yellow", "brown", "cyan")
+#col.y = c(NA, colors2[1:(length(breaks.y)-2)])
+col.y = c(NA, colors2[1:(length(ROIids))])
 color.bar=FALSE
 }
 
@@ -445,6 +452,58 @@ abline(h=chxy[2], col="green")
 }
 
 
+#' Multi Coat Function
+#'
+#' This is a function for plotting an image. The analysis result can be overcoated on the template.
+#' 
+#' \code{multicoat} requires a image array.
+#'
+#' @name multicoat
+#' @aliases multicoat
+#' @rdname multicoat
+#' @docType methods
+#' @export
+#'
+#' @param imgs list of images. Base images.
+#' @param y image2 to be overcoated.
+#' @param row4imp the number of rows per a image
+#' @param col4imp the number of columns per a image
+#' @param trm the index to trim the top and bottom of the slice
+#' @param ... further arguments passed to or from other methods.
+#' 
+#' @examples
+#' 
+#' data(exbrain)
+#' 
+multicoat = function(imgs, y=NULL, row4imp=6, col4imp=1, trm=NULL,...) {
+
+nimg = length(imgs)
+imagnames = names(imgs)
+if(is.null(imagnames)) imagnames = paste("Image", 1:length(imgs))
+x = imgs[[1]]
+pseq4imps = lapply(imgs, function(img){
+nslice = dim(img)[3]
+if(is.null(trm)) trm = ifelse(nslice>100, 15, ifelse(nslice>50, 5, 1))
+seq(trm, nslice-trm+1, length=row4imp*col4imp)
+})
+  
+laymat = do.call(cbind, lapply(1:nimg, function(com) rbind(rep((com-1)*(row4imp*col4imp+1)+1, col4imp), 
+                                                     matrix((com-1)*(row4imp*col4imp+1) + (2:(row4imp*col4imp+1)), ncol=col4imp, byrow=FALSE)))
+)
+  
+  par(oma=c(0,0,2,0), mar=c(1,1,1,1), bg="black")
+  layout(laymat, heights=c(1.5, rep(3, row4imp)))
+  for(c1 in 1:nimg){
+    plot.new(); text(0.5,0.5,paste(imagnames[c1]), cex=1, font=1, col="white")
+    for(p1 in rev(pseq4imps[[c1]])){
+      coat(imgs[[c1]], pseq=p1, color.bar=FALSE, paron=F,...)
+    }
+}
+  
+}
+  
+
+
 #' Multi components reconstruction 
 #'
 #' This is a function that returns the weight vector of multiple components obtained by the \code{msma} function applied after dimension reduction by the radial basis function to the same dimension as the original image.
@@ -479,7 +538,7 @@ abline(h=chxy[2], col="green")
 #' }
 multirec = function(object, imagedim, B=NULL, mask=NULL, midx=1, comps=NULL, XY=c("X", "Y", "XY")[1], signflip=FALSE){
 
-if(is.null(comps)) comps=1:object$comp
+if(is.null(comps)) comps=1:(object$comp[1])
 
 outstat3 = lapply(comps, function(vidx){
 Q = object[[paste0("wb", XY)]][[midx]][,vidx]
@@ -569,10 +628,10 @@ coat(x, object$outstat[[comps[c1]]], pseq=p1, color.bar=FALSE, paron=F,...)
 #' data(diffimg)
 #' data(atlasdatasets)
 #' data(atlas)
-#' atlasname = "aal"
+#' atlasname = "aal3"
 #' atlasdataset = atlasdatasets[[atlasname]]
 #' tmpatlas = atlas[[atlasname]]
-#' atlastable(tmpatlas, diffimg, atlasdataset=atlasdataset, ROIids = c(1:2, 37:40))
+#' atlastable(tmpatlas, diffimg, atlasdataset=atlasdataset, ROIids = c(1:2, 41:44))
 atlastable = function(x, y, atlasdataset=NULL, ROIids=NULL, ...) {
 
 if(is.null(atlasdataset)) stop("atlasdataset should be required")
@@ -641,18 +700,28 @@ cat("\n")
 #' 
 imgdatamat = function(imgfnames, mask=NULL, ROI=FALSE, atlas=NULL, atlasdataset=NULL, ROIids=NULL, zeromask=FALSE, schange=FALSE, ...)
 {
-x0 = readNIfTI(imgfnames[1], reorient = FALSE)
+if(length(imgfnames)>1){ x0 = readNIfTI(imgfnames[1], reorient = FALSE)}else{
+x00 = readNIfTI(imgfnames, reorient = FALSE)
+if(length(dim(x00)) == 4) x0 = x00[,,,1]
+}
+
 if(schange) x0 = sizechange(x0, ...)
 imagedim = dim(x0)
-if(is.null(mask)){brainpos = array(TRUE, imagedim)}else{ brainpos = (mask != 0)}
 
+if(is.null(mask)){brainpos = array(TRUE, imagedim)}else{
+if(schange) mask = sizechange(mask, ...)
+ brainpos = (mask != 0)
+}
+
+n = ifelse(length(imgfnames)>1, length(imgfnames), dim(x00)[4])
 S = roi = NULL
-for(i in 1:length(imgfnames))
-{
-x = readNIfTI(imgfnames[i], reorient = FALSE)
+for(i in 1:n){
+if(length(imgfnames)>1){ x = readNIfTI(imgfnames[i], reorient = FALSE)}else{
+x = x00[,,,i]
+}
 if(schange) x = sizechange(x, ...)
 if(ROI){
-roi0 = atlastable(atlas, x, atlasdataset=atlasdataset, ROIids=ROIids)
+roi0 = atlastable(atlas, x, atlasdataset=atlasdataset, ROIids=ROIids)$table
 rownames(roi0) = abbreviate(roi0$ROIname, 10)
 roi = rbind(roi, t(roi0[,"sumvalue",drop=FALSE]))
 }
@@ -690,8 +759,9 @@ list(S=S, brainpos=brainpos, imagedim=imagedim, roi=roi)
 #' @param sdevimg an array for the standard deviation image.
 #' @param mask an array for the mask image.
 #' @param n0 a numeric, which is a sample size per group.
-#' @param c1 a numeric, 
+#' @param c1 a numeric, the strength of the difference
 #' @param sd1 a numeric, standard deviation for the individual variation.
+#' @param rho a numeric, correlation coefficient in the noize
 #' @param zeromask a logical, whether mask the position with zero values for all subjects.
 #' @param reduce a vector.
 #' @param output a vector.
@@ -707,7 +777,7 @@ list(S=S, brainpos=brainpos, imagedim=imagedim, roi=roi)
 #' data(diffimg)
 #' sim1 = simbrain(baseimg = baseimg, diffimg = diffimg)
 #' 
-simbrain = function(baseimg, diffimg, sdevimg=NULL, mask=NULL, n0 = 10, c1 = 0.5, sd1 = 0.01, zeromask=FALSE, reduce = c("no", "rd1", "rd2")[1], output = c("rdata", "nifti")[1], seed=1){
+simbrain = function(baseimg, diffimg, sdevimg=NULL, mask=NULL, n0 = 10, c1 = 0.5, sd1 = 0.01, rho=NULL, zeromask=FALSE, reduce = c("no", "rd1", "rd2")[1], output = c("rdata", "nifti")[1], seed=1){
 
 imagedim = dim(baseimg)
 if(is.null(mask)){brainpos = array(TRUE, imagedim)}else{ brainpos = (mask != 0)}
@@ -716,11 +786,20 @@ Z = rep(c(0,1), each=n0)
 
 if(is.null(sdevimg)) sdevimg = array(1, dim=imagedim)
 
+if(!is.null(rho)) {
+cordmat = expand.grid(lapply(imagedim, seq))
+sigma1 = rho^as.matrix(dist(cordmat))
+sigma1 = diag(sd1*c(sdevimg)) %*% sigma1 %*% diag(sd1*c(sdevimg))
+}
+
 set.seed(seed)
 
 S = do.call(rbind, lapply(1:n, function(i){
-
+if(is.null(rho)){
 noise = array(rnorm(prod(imagedim), sd=sd1*c(sdevimg)), dim=imagedim)
+}else{
+noise = array(c(rmnorm(1, sigma=sigma1)), dim=imagedim)
+}
 data1 = baseimg + c1 * Z[i] * diffimg
 data2 = data1
 data2[data2 != 0] = data2[data2 != 0] + noise[data2 != 0]
@@ -763,18 +842,20 @@ list(S=S, Z=Z, brainpos=brainpos, imagedim=imagedim)
 sizechange = function(img1, simscale=NULL, refsize=NULL, ...){
 
 orgsize = dim(img1)
-if(!is.null(simscale) & is.null(refsize)) refsize = round(dim(img1)*simscale)
+if(!is.null(simscale) & is.null(refsize)) refsize = ceiling(dim(img1)*simscale)
 res = refsize / orgsize
 
-if(inherits(img1, "nifti")){cimg1 = as.cimg(img1@.Data)}else{cimg1 = as.cimg(img1)}
+if(inherits(img1, "nifti")){cimg1 = img1@.Data}else{cimg1 = img1}
+if(length(dim(cimg1))==3) dim(cimg1) = c(dim(cimg1), 1)
+cimg1 = as.cimg(cimg1)
 
 cimg1r = resize(cimg1, refsize[1], refsize[2], refsize[3],...)
 
 if(inherits(img1, "nifti")){
 img1r = img1
 img1r@.Data = cimg1r[,,,1]
-img1r@dim_[2:4] = refsize
-img1r@pixdim[2:4] = img1r@pixdim[2:4] / res
+img1r@dim_[2:4] = refsize[1:3]
+img1r@pixdim[2:4] = img1r@pixdim[2:4] / res[1:3]
 }else{
 img1r = cimg1r[,,,1]
 }
@@ -830,11 +911,11 @@ ptest = function(object, Z=Z, newdata=NULL, testZ=NULL, regmethod = "glm", metho
 
 ## Compute the area under the ROC curve, sensitivity, specificity, accuracy and Kappa
 glmFuncs <- caret::lrFuncs
-fivestats <- function(...) c(caret::twoClassSummary(...), caret::defaultSummary(...), caret::prSummary(...))
+fivestats <- function(...) c(caret::twoClassSummary(...), caret::defaultSummary(...), prSummary2(...))
 glmFuncs$summary <- fivestats
 ctrl <- caret::trainControl(method = methods1, number = number1, repeats = repeats1, classProbs = TRUE, summaryFunction = fivestats)
 
-if(inherits(object, "msma")){ Ss = object$ssX }else{Ss = object}
+if(inherits(object, "msma")){ Ss = object$ssX; if(inherits(Ss, "list")){Ss=do.call(cbind,Ss)} }else{Ss = object}
 colnames(Ss) = paste("c", c(1:ncol(Ss)), sep="")
 
 swdata = data.frame(Z = as.factor(ifelse(Z == 1, "Y", "N")), Ss)
@@ -857,7 +938,7 @@ cvout = trainout$results[which.max(trainout$results$ROC),]
 traincnfmat = caret::confusionMatrix(predict(trainout), swdata$Z, positive="Y", mode="everything")
 
 if(inherits(object, "msma")){ 
-evalmeasure = c(scorecvauc=cvout$ROC, bic1=object$bic[[object$comp]][1], bic1=object$bic[[object$comp]][2])
+evalmeasure = c(scorecvauc=cvout$ROC, bic1=object$bic[[object$comp[1]]][1], bic1=object$bic[[object$comp[1]]][2])
 }else{
 evalmeasure = cvout
 }
@@ -877,6 +958,26 @@ predcnfmat = NA
 }
 
 list(object=object, trainout=trainout, scorecvroc=cvout, evalmeasure=evalmeasure, traincnfmat=traincnfmat, predcnfmat=predcnfmat)
+}
+
+
+#' @rdname mand-internal
+prSummary2 = function (data, lev = NULL, model = NULL) 
+{
+    if (length(levels(data$obs)) > 2) 
+        stop(paste("Your outcome has", length(levels(data$obs)), 
+            "levels. `prSummary`` function isn't appropriate.", 
+            call. = FALSE))
+    if (!all(levels(data[, "pred"]) == levels(data[, "obs"]))) 
+        stop("Levels of observed and predicted data do not match.", 
+            call. = FALSE)
+    if (!lev[1] %in% colnames(data)) 
+        stop(paste("Class probabilities are needed to score models using the", 
+            "area under the PR curve. Set `classProbs = TRUE`", 
+            "in the trainControl() function."), call. = FALSE)
+    c(Precision = caret::precision(data = data$pred, reference = data$obs, relevant = lev[1]), 
+Recall = caret::recall(data = data$pred, reference = data$obs, relevant = lev[1]),
+F = caret::F_meas(data = data$pred, reference = data$obs, relevant = lev[1]))
 }
 
 
@@ -946,4 +1047,42 @@ if (n == 64) {
     rgb(temp[, 1], temp[, 2], temp[, 3], maxColorValue = 255)
 }
 
+
+#' @rdname mand-internal
+rmnorm <- function(n, mean = rep(0, nrow(sigma)), sigma = diag(length(mean)), method=c("eigen", "svd", "chol"), pre0.9_9994 = FALSE, checkSymmetry = TRUE)
+{
+if (checkSymmetry && !isSymmetric(sigma, tol = sqrt(.Machine$double.eps), check.attributes = FALSE)) {
+stop("sigma must be a symmetric matrix")
+}
+if (length(mean) != nrow(sigma))
+stop("mean and sigma have non-conforming size")
+
+method <- match.arg(method)
+
+R <- if(method == "eigen") {
+ev <- eigen(sigma, symmetric = TRUE)
+if (!all(ev$values >= -sqrt(.Machine$double.eps) * abs(ev$values[1]))){
+    warning("sigma is numerically not positive semidefinite")
+}
+## ev$vectors %*% diag(sqrt(ev$values), length(ev$values)) %*% t(ev$vectors)
+## faster for large  nrow(sigma):
+t(ev$vectors %*% (t(ev$vectors) * sqrt(pmax(ev$values, 0))))
+}
+else if(method == "svd"){
+s. <- svd(sigma)
+if (!all(s.$d >= -sqrt(.Machine$double.eps) * abs(s.$d[1]))){
+    warning("sigma is numerically not positive semidefinite")
+}
+t(s.$v %*% (t(s.$u) * sqrt(pmax(s.$d, 0))))
+}
+else if(method == "chol"){
+R <- chol(sigma, pivot = TRUE)
+R[, order(attr(R, "pivot"))]
+}
+
+retval <- matrix(rnorm(n * ncol(sigma)), nrow = n, byrow = !pre0.9_9994) %*%  R
+retval <- sweep(retval, 2, mean, "+")
+colnames(retval) <- names(mean)
+retval
+}
 

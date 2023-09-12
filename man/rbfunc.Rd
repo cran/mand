@@ -5,7 +5,7 @@
 \alias{rbfunc}
 \title{Radial Basis Function}
 \usage{
-rbfunc(imagedim, seppix, hispec = FALSE, mask = NULL)
+rbfunc(imagedim, seppix, hispec = FALSE, mask = NULL, brainpos = NULL)
 }
 \arguments{
 \item{imagedim}{a vector indicating image three dimension.}
@@ -15,6 +15,8 @@ rbfunc(imagedim, seppix, hispec = FALSE, mask = NULL)
 \item{hispec}{a logical. TRUE produces a matrix output. FALSE produces a list output to reduce the data memorry.}
 
 \item{mask}{a vector.}
+
+\item{brainpos}{a logical vector.}
 }
 \description{
 This makes a radial basis function.

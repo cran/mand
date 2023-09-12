@@ -31,9 +31,9 @@ This function refers to the results obtained by the analysis in an atlas image, 
 data(diffimg)
 data(atlasdatasets)
 data(atlas)
-atlasname = "aal"
+atlasname = "aal3"
 atlasdataset = atlasdatasets[[atlasname]]
 tmpatlas = atlas[[atlasname]]
-atlastable(tmpatlas, diffimg, atlasdataset=atlasdataset, ROIids = c(1:2, 37:40))
+atlastable(tmpatlas, diffimg, atlasdataset=atlasdataset, ROIids = c(1:2, 41:44))
 }
 \concept{print}

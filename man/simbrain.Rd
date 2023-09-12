@@ -13,6 +13,7 @@ simbrain(
   n0 = 10,
   c1 = 0.5,
   sd1 = 0.01,
+  rho = NULL,
   zeromask = FALSE,
   reduce = c("no", "rd1", "rd2")[1],
   output = c("rdata", "nifti")[1],
@@ -30,9 +31,11 @@ simbrain(
 
 \item{n0}{a numeric, which is a sample size per group.}
 
-\item{c1}{a numeric,}
+\item{c1}{a numeric, the strength of the difference}
 
 \item{sd1}{a numeric, standard deviation for the individual variation.}
+
+\item{rho}{a numeric, correlation coefficient in the noize}
 
 \item{zeromask}{a logical, whether mask the position with zero values for all subjects.}
 
