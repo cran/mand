@@ -33,6 +33,7 @@ options(width = 300)
 The `mand` package provides functions for multivariate analysis for neuroimaging data. 
 ```{r}
 library(mand)
+library(msma)
 ```
 
 # Introduction
